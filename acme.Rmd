@@ -1,0 +1,220 @@
+---
+title: "Acme New Landing Page A/B Test"
+author: "Ben Paul"
+date: "May 20, 2015"
+output: html_document
+---
+
+## Background
+
+- It has previously been shown that user experience on our site is better if users first answer a few questions about their preferences.
+
+- We are testing a new landing page to determine if it will cause more users to answer at least one question about their preferences.
+
+- If the new landing page causes any statistically significant increase in **conversion rate** (percentage of users who complete at least one question), then it will be considered a success.
+
+## Hypotheses
+
+- The new landing page will cause a statistically significant increase in conversion rate.
+
+## Method
+
+- Randomly assign 50% of users to a control group that will be shown the old landing page and the other 50% of users to a treatment group that will be shown the new landing page.
+
+- Track whether each user answers at least one question or not.
+
+- Run a *z*-test to determine if the treatment group had a greater conversion rate than the control group, with the conventional cutoff for statistical signicance of *p* < 0.05, two-tailed.
+
+## Analysis
+
+### Set up environment
+
+```{r Set up environment}
+
+library("plyr")
+library("dplyr", warn.conflicts = FALSE) # I'm aware of the plyr/dplyr conflicts
+library("scales")
+
+knitr::opts_chunk$set(comment = NA) # remove hashes in output
+
+```
+
+### Read data
+
+```{r Read data}
+dat <- read.csv("data/takehome.csv")
+
+```
+
+### Clean data
+
+#### Handle data types
+
+Check that data types are appropriate.
+
+```{r Clean data - Check data types}
+
+summary(dat); str(dat);
+
+```
+
+Data types appear to be appropriate. The independent variables "ab" and "landing_page" each have two levels, corresponding to the control condition ("control"/"old_page") and the treatment condition ("treatment"/"new_page").
+
+The dependent variable "converted" is an integer with just two possible values representing whether the user answered at least one question (1) or not (0). Let's ensure that it has no other values: 
+
+```{r Clean data - Check dependent variable values}
+
+unique(dat$converted)
+
+```
+
+The dependent variable has no other values besdies 0 and 1, so no cleaning is required.
+
+In summary, there are no problematic data types or values apparent from initial inspection.
+
+#### Handle duplicates
+
+The documentation indicated that each user should be assigned to just one condition, either the control group (ab = "control"), which was shown the old landing page (landing_page = "old_page"), or the treatment group (ab = "treatment"), which was shown the new landing page (landing_page = "new_page").
+
+Therefore, each user_id should have just one row in the data set, with information about the one condition they were assigned as well as the one landing page they were shown. If any user has more than one row, something may have gone wrong and we will need to explore the data to determine how to handle it. Let's start by determining if this is an issue.
+
+```{r Clean data - Find users with multiple observations}
+
+# find user_ids with multiple rows
+dat$multi_obs <- (duplicated(dat$user_id) | duplicated(dat$user_id, fromLast = TRUE))
+
+# print the number of rows with this issue
+dat[dat$multi_obs, ] %>% nrow
+
+# print the percentage of rows that have this issue
+percent((dat[dat$multi_obs, ] %>% nrow) / (dat %>% nrow))
+
+```
+
+These calculations show that some users do have multiple rows. These **multi-observation** users account for 9,528 observations, or 5% of all observations. This is concerning.
+
+To understand this issue more fully, the next step will be to visually inspect a sample of multi-observation users' data.
+
+```{r Clean data - Print multi-observation data}
+
+# print a sample of multi-observation users' data
+dat[dat$multi_obs, ] %>%
+  arrange(user_id, ts) %>%  # show each user's data chronologically
+  head(30) %>%
+  mutate(
+    # convert timestamps to human readable form
+    ts = ts %>% as.POSIXct(origin = "1970-01-01", tz = "GMT") 
+  )
+
+```
+
+In this sample of multi-observation users, it appears that such users see the new page first and then land on the old page one second later. Inspection of all multi-observation user data verified this.
+
+Inspection of this sample also raised the question of whether multi-observation users are primarily in the treatment group. Analysis of all multi-observation user data (below) confirmed that 99.9% of multi-observation users were assigned to the treatment group, and therefore should have been shown only the new page. However, what actually happened is that multi-observation users saw the new page for one second before ultimately landing on the old page, which was intended for the control group. This behavior does not match the intended experimental design.
+
+The sample data also suggest that multi-observation users never convert on the new page, which would make sense since it was shown for just one second before they landed on the old page. Analysis of all multi-observation user data (below) confirmed that none of these users converted on the new page.
+
+```{r Clean data - Summarize multi-observation data}
+
+# calculate percentage of multi-observation users assigned only to the treatment group
+multi_summary <- dat[dat$multi_obs, ] %>%
+  group_by(user_id) %>%
+  summarize(all_treatment = as.numeric(all(ab == "treatment"))) # if user's rows are all "treatment" -> 1
+
+percent(sum(multi_summary$all_treatment) / nrow(multi_summary))
+
+# count number of times multi-observation users converted on the new page
+dat[dat$multi_obs, ] %>%
+  filter(landing_page == "new_page", converted == 1) %>%
+  nrow
+
+```
+
+The calculations above demonstrate that, as previously discussed, 99.9% of multi-observation users were in the treatment group, but none of them converted from the new landing page.
+
+It would be possible to correct such users' data by changing their label from "treatment" to "control" and by removing the data from when they loaded the new page for a second. However, their responses may have been influenced by a glitch in the website,  which would not be generalizable to the wider audience for which these changes are intended. In addition, they were not exposed to the experimental design as intended. Therefore, their data would be difficult to interpret and should be removed altogether.
+
+Note that the decision to remove their data entirely would be defensible only if multi-observation users represented a random subset of the population under test. If multi-observation users represent a non-random subset (e.g., people who use Internet Explorer), it would not be wise to delete their data, as it would limit the generalizability of the results (e.g., results would then only apply to people who don't use Internet Explorer). Therefore, if the glitch affected a non-random subset of users, I would advise running more users through the study after fixing the glitch.
+
+For the sake of this assignment, I will assume this is due to a random glitch and we can remove their data.
+
+```{r Clean data - Handle duplicates - Remove users with multiple observations}
+
+dat <- dat[!dat$multi_obs, ]
+
+```
+
+#### Check for further experimental errors
+
+As previously mentioned, users in the control group should only see the old page, and users in the treatment group should only see the new page.
+
+Therefore, after we removed users with multiple observations, if there are still any users left that saw the wrong page given their condition, we will need to decide how to handle them.
+
+```{r Clean data - Check for further experimental errors}
+
+# check that treatment and control groups saw their corresponding pages
+table(dat$ab, dat$landing_page)
+
+```
+
+The table indicates that we have fully removed the problematic users; each condition is now associated with the correct landing page.
+
+### Analyze data
+
+Now that the data has been cleaned, we can conduct a *z*-test to determine if there was an effect of experimental condition on conversion rate.
+
+```{r Analyze data}
+
+tbl <- table(dat$ab, dat$converted)
+
+res <- tbl %>% prop.test # aka z-test
+names(res$estimate) <- c("control", "treatment") # make results readable
+
+# invert point estimates to show conversion rate rather than non-conversion rate
+rates <- (1 - res$estimate)
+
+# format confidence interval of difference as perentage
+diff.conf.int <- res$conf.int
+
+# to help with interpretation, also calculate conversion rate confidence interval for each group separately
+control.conf.int <- prop.test(tbl["control", "1"], sum(tbl["control", ])) %>%
+  .$conf.int
+
+treatment.conf.int <- prop.test(tbl["treatment", "1"], sum(tbl["treatment", ])) %>%
+  .$conf.int
+
+```
+
+## Results
+
+Examine results.
+
+```{r Results}
+
+control.conf.int %>% round(3) %>% percent
+treatment.conf.int %>% round(3) %>% percent
+
+rates %>% round(3) %>% sapply(percent)
+diff.conf.int %>% round(3) %>% percent
+
+res["p.value"]
+
+```
+
+The conversion rate of the old page is 10.0% (95% confidence interval, 9.8% - 10.2%). The conversion rate of the new page is 10.7% (95% confidence interval, 10.5% - 10.9%). The new page has a higher conversion rate than the old page (95% confidence interval of difference, 0.3% - 0.9%), *p* < 0.001.
+
+If the decision to remove the problematic users was correct, then we can say with 95% confidence that the new page's conversion rate is 3 - 9% greater than the old page's conversion rate.
+
+## Discussion
+
+Given the higher conversion rate of the new landing page, I would recommend we switch all users over to it and to monitor whether the conversion rate increases as expected.
+
+Regarding the discrepancy between our data and the third party's data, I believe our data is more accurate because we have cleaned problematic observations from it. There is no reason to believe that the third party cleaned the data, although I would contact them to confirm this.
+
+I would explain the discrepancy to the project manager by stating that some people were mislabeled as having seen the new page, when really they saw the old page. Acme's system isn't set up to catch these problems, but as a result of her request we were able to find and delete the bad data, uncovering the significant results that she suspected were there all along.
+
+To protect future experiments, it would be important to understand why these glitches occurred. Therefore, I would discuss the issue with developers and quality assurance analysts and try to reproduce the problematic behavior. If I'm not able to, I would offer an incentive to anyone in the company who could. (This strategy has been successful for me in my current company: employees will actually race to reproduce an issue to earn a gold star.) Once the conditions for reproduction are identified, we can determine how to prevent this glitch in the future.
+
+I would also suggest we set up monitoring in similar experiments to ensure that these problematic conditions don't occur again. In particular, (a) each user should have just one observation, and (b) each experimental condition should be associated with the expected behavior (e.g., the treatment condition should be associated with only new page and the control condition should be associated with only the old page). A first step would be to set up as a daily email indicating whether (a) and (b) are satisfied. As we grow more confident in the system, we could have it only email us if (a) and (b) are not satisfied.
+
+Whenever problems arise, we should analyze what went wrong, explore whether we need to delete or correct the relevant data, and continue to implement more safeguards to prevent similar problems in the future.
