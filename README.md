@@ -1,2 +1,2 @@
 # acme
-Exercise analyzing A/B test results
+A data science exercise to analyze A/B test results
