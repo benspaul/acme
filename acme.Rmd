@@ -23,7 +23,7 @@ output: html_document
 
 - Track whether each user answers at least one question or not.
 
-- Run a *z*-test to determine if the treatment group had a greater conversion rate than the control group, with the conventional cutoff for statistical signicance of *p* < 0.05, two-tailed.
+- Run a *z*-test to determine if the treatment group had a greater conversion rate than the control group, with the conventional cutoff for statistical significance of *p* < 0.05, two-tailed.
 
 ## Analysis
 
@@ -68,7 +68,7 @@ unique(dat$converted)
 
 ```
 
-The dependent variable has no other values besdies 0 and 1, so no cleaning is required.
+The dependent variable has no other values besides 0 and 1, so no cleaning is required.
 
 In summary, there are no problematic data types or values apparent from initial inspection.
 
@@ -173,7 +173,7 @@ names(res$estimate) <- c("control", "treatment") # make results readable
 # invert point estimates to show conversion rate rather than non-conversion rate
 rates <- (1 - res$estimate)
 
-# format confidence interval of difference as perentage
+# format confidence interval of difference as percentage
 diff.conf.int <- res$conf.int
 
 # to help with interpretation, also calculate conversion rate confidence interval for each group separately
