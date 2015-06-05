@@ -87,7 +87,7 @@ img {
 <ul>
 <li><p>Randomly assign 50% of users to a control group that will be shown the old landing page and the other 50% of users to a treatment group that will be shown the new landing page.</p></li>
 <li><p>Track whether each user answers at least one question or not.</p></li>
-<li><p>Run a <em>z</em>-test to determine if the treatment group had a greater conversion rate than the control group, with the conventional cutoff for statistical signicance of <em>p</em> &lt; 0.05, two-tailed.</p></li>
+<li><p>Run a <em>z</em>-test to determine if the treatment group had a greater conversion rate than the control group, with the conventional cutoff for statistical significance of <em>p</em> &lt; 0.05, two-tailed.</p></li>
 </ul>
 </div>
 <div id="analysis" class="section level2">
@@ -134,7 +134,7 @@ knitr::opts_chunk$set(comment = NA) # remove hashes in output</code></pre>
 <p>The dependent variable “converted” is an integer with just two possible values representing whether the user answered at least one question (1) or not (0). Let’s ensure that it has no other values:</p>
 <pre class="r"><code>unique(dat$converted)</code></pre>
 <pre><code>[1] 0 1</code></pre>
-<p>The dependent variable has no other values besdies 0 and 1, so no cleaning is required.</p>
+<p>The dependent variable has no other values besides 0 and 1, so no cleaning is required.</p>
 <p>In summary, there are no problematic data types or values apparent from initial inspection.</p>
 </div>
 <div id="handle-duplicates" class="section level4">
@@ -236,7 +236,7 @@ names(res$estimate) &lt;- c(&quot;control&quot;, &quot;treatment&quot;) # make r
 # invert point estimates to show conversion rate rather than non-conversion rate
 rates &lt;- (1 - res$estimate)
 
-# format confidence interval of difference as perentage
+# format confidence interval of difference as percentage
 diff.conf.int &lt;- res$conf.int
 
 # to help with interpretation, also calculate conversion rate confidence interval for each group separately
