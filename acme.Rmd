@@ -1,5 +1,5 @@
 ---
-title: "Acme New Landing Page A/B Test"
+title: "A/B test with problematic data"
 author: "Ben Paul"
 date: "May 20, 2015"
 output: html_document
@@ -176,7 +176,8 @@ rates <- (1 - res$estimate)
 # format confidence interval of difference as percentage
 diff.conf.int <- res$conf.int
 
-# to help with interpretation, also calculate conversion rate confidence interval for each group separately
+# to help with interpretation, also calculate conversion rate
+# confidence interval for each group separately
 control.conf.int <- prop.test(tbl["control", "1"], sum(tbl["control", ])) %>%
   .$conf.int
 
